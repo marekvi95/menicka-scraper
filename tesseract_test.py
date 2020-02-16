@@ -4,84 +4,94 @@ except ImportError:
     import Image
 import os
 import re
+import urllib.request
 import pytesseract
 
-
-# If you don't have tesseract executable in your PATH, include the following:
-pytesseract.pytesseract.tesseract_cmd = r'/usr/local/Cellar/tesseract/4.1.1/bin/tesseract'
-
-# Simple image to string
-menu_text = pytesseract.image_to_string(Image.open('/Users/marekvitula/Downloads/kozák-2.png'), lang='ces')
-
-days = ['Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek']
-
-# remove blank lines
-text = os.linesep.join([s for s in menu_text.splitlines() if s.strip()])
-
-text_list = text.splitlines()
-iter_days = iter(days)
-iter_lines = iter(text_list)
-
-day_start_index = {}
-day_last_index = {}
-day_menu = {}
-day_soup = {}
-
-price_list = []
-
-
-# remove substrings with digit and dot (menu items)
-text_list = [re.sub(r'^[1-9]\.', '', s) for s in text_list]
-
-
-day = next(iter_days)
-prev_day = day
-
-for idx, line in enumerate(text_list):
-   if day in line:
-        print(day)
-        print(idx)
-        day_start_index[day] = idx
-        day_last_index[prev_day] = idx
-        try:
-            prev_day = day
-            day = next(iter_days)
-        except StopIteration:
-            break
-
-print(day_start_index)
-print(day_last_index)
-
-for key, value in day_start_index.items():
-    try: 
-        # add soup of the day to the dictionary - crop day and date from the string
-        day_soup[key] = text_list[value][len(key)+7:] 
-        # add meneu of the day to the dictionary
-        day_menu[key] = text_list[value+1:day_last_index[key]] 
-    except KeyError:
-        day_menu[key] = text_list[value+1:-5]
+class KozakScrapper:
     
-    print(day_menu)
-    print(day_soup)
+    def __init__(self, tesseract_path: str, kozak_menu_url) -> None:
+        self.DAYS = ['Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek']
+        
+        self.tesseract_path = tesseract_path
+        self.kozak_menu_url = kozak_menu_url
 
-price_iter = iter(price_list)
+        self.day_start_index = {}
+        self.day_last_index = {}
+        self.day_menu = {}
+        self.day_soup = {}
 
-for line in text_list:
-    if ',-' in line:
-        price_list.append(line[:-2] + ' Kč')
+        self.price_list = []
 
-print(price_list)
+    def get_menu_text(self) -> str:
+        try:
+            urllib.request.urlretrieve(self.kozak_menu_url, "menu.png")
+        except Exception as e:
+            print(e)
+        
+        pytesseract.pytesseract.tesseract_cmd = self.tesseract_path
+        menu_text = pytesseract.image_to_string(Image.open('menu.png'), lang='ces')
+        return menu_text
+    
+    def format_menu_text(self, menu_text: str) -> list:
+        # remove blank lines
+        text = os.linesep.join([s for s in menu_text.splitlines() if s.strip()])
+        text_list = text.splitlines()
+        # remove substrings with digit and dot (menu items)
+        text_list = [re.sub(r'^[1-9]\.', '', s) for s in text_list]
+        return text_list
+    
+    def get_menu_indexes(self, text_list: list) -> None:
+        iter_days = iter(self.DAYS)
+        day = next(iter_days)
+        prev_day = day
+        
+        for idx, line in enumerate(text_list):
+            if day in line:
+                self.day_start_index[day] = idx
+                self.day_last_index[prev_day] = idx
+                try:
+                    prev_day = day
+                    day = next(iter_days)
+                except StopIteration:
+                    break
+    
+    def get_daily_menu(self, text_list: str) -> None:
+        for key, value in self.day_start_index.items():
+            try: 
+                # add soup of the day to the dictionary - crop day and date from the string
+                self.day_soup[key] = text_list[value][len(key)+7:] 
+                # add meneu of the day to the dictionary
+                self.day_menu[key] = text_list[value+1:self.day_last_index[key]] 
+            except KeyError:
+                self.day_menu[key] = text_list[value+1:-5]
 
-html_table_start = """<div class='content'>
-   <h2>{}</h2>
-   <table class='menu'>""".format(days[0])
-html_soup = "<tr class='soup'><td class='no'></td><td class='food'>{}</td><td class='prize'></td></tr>".format(day_soup[days[0]])
-html_menu = ""
-for idx, x in enumerate(day_menu[days[0]]):
-    html_menu = html_menu + "<tr class='main'><td class='no'>{}. </td><td class='food'>{}</td><td class='prize'>{}</td></tr>\n".format(idx+1, x, price_list[idx])
+    def get_food_price(self, text_list: str) -> None:
+        for line in text_list:
+            if ',-' in line:
+                self.price_list.append(line[:-2] + ' Kč')
+    
+    def compose_html_for_day(self, day_number: int) -> str:
+        assert day_number >= 0 and day_number < 5
+        
+        html_table_start = """<div class='content'>
+            <h2>{}</h2>
+            <table class='menu'>""".format(self.DAYS[day_number])
+        html_soup = "<tr class='soup'><td class='no'></td><td class='food'>{}</td><td class='prize'></td></tr>\n".format(self.day_soup[self.DAYS[0]])
+        html_menu = ""
+        for idx, x in enumerate(self.day_menu[self.DAYS[day_number]]):
+            html_menu = html_menu + "<tr class='main'><td class='no'>{}. </td><td class='food'>{}</td><td class='prize'>{}</td></tr>\n".format(idx+1, x, self.price_list[idx])
 
-html_table_end = """</table>
-</div>"""
+        html_table_end = """</table>
+        </div>"""
 
-html = html_table_start + html_soup + html_menu + html_table_end
-print(html)
+        html = html_table_start + html_soup + html_menu + html_table_end
+        return html
+
+if __name__ == "__main__":
+    kozak = KozakScrapper(r'/usr/local/Cellar/tesseract/4.1.1/bin/tesseract', 'https://ukozaka.cz/wp-content/uploads/2020/02/koz%C3%A1k-2.png')
+    menu_text = kozak.get_menu_text()
+    text_list = kozak.format_menu_text(menu_text)
+    kozak.get_menu_indexes(text_list)
+    kozak.get_daily_menu(text_list)
+    kozak.get_food_price(text_list)
+    print(kozak.compose_html_for_day(4))
