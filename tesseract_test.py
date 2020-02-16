@@ -23,6 +23,12 @@ class KozakScrapper:
         self.price_list = []
 
     def get_menu_text(self) -> str:
+        """Retrieve PNG menu from the URL provided in the constructor
+        and run Tesseract OCR
+        
+        Returns:
+            str -- menu text
+        """
         try:
             urllib.request.urlretrieve(self.kozak_menu_url, "menu.png")
         except Exception as e:
@@ -33,6 +39,14 @@ class KozakScrapper:
         return menu_text
     
     def format_menu_text(self, menu_text: str) -> list:
+        """Format menu text - remove blank lines, remove digits
+        
+        Arguments:
+            menu_text {str} -- menu text from the OCR 
+        
+        Returns:
+            list -- formated menu
+        """
         # remove blank lines
         text = os.linesep.join([s for s in menu_text.splitlines() if s.strip()])
         text_list = text.splitlines()
@@ -41,6 +55,11 @@ class KozakScrapper:
         return text_list
     
     def get_menu_indexes(self, text_list: list) -> None:
+        """Get start and last index in the list for each day
+        
+        Arguments:
+            text_list {list} -- formated menu
+        """
         iter_days = iter(self.DAYS)
         day = next(iter_days)
         prev_day = day
@@ -56,6 +75,11 @@ class KozakScrapper:
                     break
     
     def get_daily_menu(self, text_list: str) -> None:
+        """[summary]
+        
+        Arguments:
+            text_list {str} -- [description]
+        """
         for key, value in self.day_start_index.items():
             try: 
                 # add soup of the day to the dictionary - crop day and date from the string
@@ -66,11 +90,17 @@ class KozakScrapper:
                 self.day_menu[key] = text_list[value+1:-5]
 
     def get_food_price(self, text_list: str) -> None:
+        """[summary]
+        
+        Arguments:
+            text_list {str} -- [description]
+        """
         for line in text_list:
             if ',-' in line:
                 self.price_list.append(line[:-2] + ' Kč')
     
     def compose_html_for_day(self, day_number: int) -> str:
+        
         assert day_number >= 0 and day_number < 5
         
         html_table_start = """<div class='content'>
