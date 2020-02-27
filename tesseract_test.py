@@ -84,10 +84,10 @@ class KozakScrapper:
             try: 
                 # add soup of the day to the dictionary - crop day and date from the string
                 self.day_soup[key] = text_list[value][len(key)+7:] 
-                # add meneu of the day to the dictionary
+                # add menu of the day to the dictionary
                 self.day_menu[key] = text_list[value+1:self.day_last_index[key]] 
             except KeyError:
-                self.day_menu[key] = text_list[value+1:-5]
+                self.day_menu[key] = text_list[value+1:value+6]
 
     def get_food_price(self, text_list: str) -> None:
         """[summary]
@@ -97,7 +97,7 @@ class KozakScrapper:
         """
         for line in text_list:
             if ',-' in line:
-                self.price_list.append(line[:-2] + ' Kč')
+                self.price_list.append(line[-6:-2] + ' Kč')
     
     def compose_html_for_day(self, day_number: int) -> str:
         
@@ -118,10 +118,13 @@ class KozakScrapper:
         return html
 
 if __name__ == "__main__":
-    kozak = KozakScrapper(r'/usr/local/Cellar/tesseract/4.1.1/bin/tesseract', 'https://ukozaka.cz/wp-content/uploads/2020/02/koz%C3%A1k-2.png')
+    kozak = KozakScrapper(r'/usr/bin/tesseract', 'https://ukozaka.cz/wp-content/uploads/2020/02/koz%C3%A1k-4.png')
     menu_text = kozak.get_menu_text()
+    print(menu_text)
     text_list = kozak.format_menu_text(menu_text)
     kozak.get_menu_indexes(text_list)
     kozak.get_daily_menu(text_list)
     kozak.get_food_price(text_list)
-    print(kozak.compose_html_for_day(4))
+    print(kozak.price_list)
+    for x in range(0,5):
+        print(kozak.compose_html_for_day(x))
